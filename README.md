@@ -84,7 +84,7 @@ Workers need outbound HTTPS (443) to these hosts ([Team Pools networking](https:
 | `cloud-agent-artifacts.s3.us-east-1.amazonaws.com` | Artifact uploads. Blocking it disables artifacts only. |
 | Your Git host and package registries | Clones, fetches, dependency installs |
 | `REGION-docker.pkg.dev`, `secretmanager.googleapis.com` | Image pulls and secret reads, over Private Google Access |
-| `deb.debian.org` | Path A only: Docker and Git install on first boot |
+| `deb.debian.org`, `packages.cloud.google.com` | Path A only: Docker and Git install on first boot |
 
 Cursor stores agent artifacts (screenshots, videos, log references) in Cursor-managed storage outside your GCP project; review this for data residency. See [Artifacts](https://cursor.com/docs/cloud-agent/self-hosted/pool#artifacts) and [What leaves your network](https://cursor.com/docs/cloud-agent/self-hosted#what-leaves-your-network).
 
