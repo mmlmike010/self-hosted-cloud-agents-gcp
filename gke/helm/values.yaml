@@ -1,0 +1,23 @@
+# Values for oci://public.ecr.aws/k0i0n2g5/charts/k8s-workers --version 0.2.2.
+# image.repository and image.tag are passed with --set because they contain
+# PROJECT_ID. See install-controller.sh.
+
+# Any-repo pool. Must match the name registered in register-pool.sh.
+pool: gke-workers
+
+controller:
+  # 1 keeps one idle worker connected and backfills after each claim.
+  # 0 spawns one worker Pod per claimed request.
+  warmIdle: 1
+
+auth:
+  # Created by create-api-key-secret.sh from Secret Manager.
+  existingSecret: cursor-workers-api-key
+
+# Applied to each spawned worker Pod. Size like a CI runner for your repos.
+resources:
+  requests:
+    cpu: 1
+    memory: 2Gi
+  limits:
+    memory: 4Gi
