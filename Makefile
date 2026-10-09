@@ -19,7 +19,7 @@ GCE_POOL ?= gce-lab
 GIT_TOKEN_SECRET_ID ?=
 TF_DIR := gce/terraform
 
-# Terraform reads TF_VAR_<name>, so .env drives Path A without a tfvars file
+# Terraform reads TF_VAR_<name>, so .env drives the Compute Engine path without a tfvars file
 export TF_VAR_project_id = $(PROJECT_ID)
 export TF_VAR_region = $(REGION)
 export TF_VAR_zone = $(ZONE)
@@ -40,12 +40,12 @@ help:
 	@echo "Shared"
 	@echo "  check          Run every offline check (Terraform, ShellCheck, hadolint, Helm, kubeconform)"
 	@echo "  apis           Enable the Google Cloud APIs both paths use"
-	@echo "  registry       Create the Artifact Registry repo (Path B only, Terraform owns it in Path A)"
+	@echo "  registry       Create the Artifact Registry repo (GKE only, Terraform owns it on Compute Engine)"
 	@echo "  image          Build and push the worker image to Artifact Registry"
 	@echo "  docker-build   Build the worker image locally"
 	@echo "  docker-run     Run one any-repo worker locally (needs CURSOR_API_KEY)"
 	@echo "  pools          List Team Pools and worker counts from the Cursor API"
-	@echo "Path A: Compute Engine + Docker (gce/README.md)"
+	@echo "Compute Engine + Docker (gce/terraform/README.md)"
 	@echo "  gce-git-token  Store a read-only Git token in Secret Manager (optional)"
 	@echo "  gce-init, gce-plan, gce-apply, gce-destroy"
 	@echo "  gce-put-key    Add the Cursor API key as a Secret Manager version"
@@ -53,7 +53,7 @@ help:
 	@echo "  gce-logs       Show the startup script output from the serial console"
 	@echo "  gce-ssh        SSH to the worker VM through IAP"
 	@echo "  gce-rerun      Rerun the startup script (after key rotation or image push)"
-	@echo "Path B: GKE + k8s-workers Helm chart (gke/README.md)"
+	@echo "GKE + Helm (gke/helm/README.md)"
 	@echo "  gke-network, gke-cluster, gke-key, gke-pool, gke-install, gke-render, gke-status, gke-destroy"
 
 check:

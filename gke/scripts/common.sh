@@ -3,7 +3,7 @@
 set -euo pipefail
 
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd)"
-GKE_DIR="${ROOT_DIR}/gke"
+HELM_DIR="${ROOT_DIR}/gke/helm"
 
 if [[ -f "${ROOT_DIR}/.env" ]]; then
   while IFS='=' read -r key value; do
@@ -46,12 +46,12 @@ export GKE_POOL="${GKE_POOL:-gke-workers}"
 export CHART_VERSION="${CHART_VERSION:-0.2.2}"
 export CHART_URL="${CHART_URL:-https://github.com/anysphere/k8s-workers/releases/download/v${CHART_VERSION}/k8s-workers-${CHART_VERSION}.tgz}"
 
-# Space-separated overlay files under gke/, for example "values-clone-git-repos.yaml"
+# Space-separated overlay files under gke/helm/, for example "values-clone-git-repos.yaml"
 export VALUES_OVERLAYS="${VALUES_OVERLAYS:-}"
 
-VALUES_ARGS=(-f "${GKE_DIR}/values.yaml")
+VALUES_ARGS=(-f "${HELM_DIR}/values.yaml")
 for overlay in ${VALUES_OVERLAYS}; do
-  VALUES_ARGS+=(-f "${GKE_DIR}/${overlay}")
+  VALUES_ARGS+=(-f "${HELM_DIR}/${overlay}")
 done
 VALUES_ARGS+=(
   --set "image.repository=${IMAGE_REPO}"

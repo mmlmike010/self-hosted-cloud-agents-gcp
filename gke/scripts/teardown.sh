@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# Deletes everything Path B created. gcloud asks before each delete.
-# If Path A runs in the same project, keep the shared registry and secret:
+# Deletes everything the GKE path created. gcloud asks before each delete.
+# If the Compute Engine path uses the same project, keep the shared registry and secret:
 #   KEEP_SHARED=1 ./gke/scripts/teardown.sh
 # shellcheck source=common.sh
 source "$(dirname "$0")/common.sh"

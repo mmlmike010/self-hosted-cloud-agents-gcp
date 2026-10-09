@@ -1,4 +1,4 @@
-# Cursor self-hosted worker image for Compute Engine (Path A) and GKE (Path B).
+# Cursor self-hosted worker image for both the Compute Engine and GKE paths.
 FROM ubuntu:24.04
 ARG TARGETARCH
 # Keep within one minor version of your GKE control plane (Kubernetes version skew policy)

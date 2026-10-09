@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # Offline checks for everything in the repo. Nothing here talks to GCP or Cursor.
 # Needs: terraform, shellcheck, hadolint, helm, kubeconform, python3 with PyYAML.
-# Optional: mmdc (Mermaid CLI) for the diagram.
+# Optional: mmdc (Mermaid CLI) for the diagram. Pass extra flags in MMDC_ARGS.
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -58,12 +58,12 @@ hadolint docker/Dockerfile
 step "Helm template + kubeconform: base, clone-git-repos, session-token"
 chart_url="https://github.com/anysphere/k8s-workers/releases/download/v0.2.2/k8s-workers-0.2.2.tgz"
 render() {
-  helm template gke-workers "${chart_url}" --namespace cursord -f gke/values.yaml "$@"
+  helm template gke-workers "${chart_url}" --namespace cursord -f gke/helm/values.yaml "$@"
 }
 render >"${TMP}/base.yaml"
-render -f gke/values-clone-git-repos.yaml >"${TMP}/clone.yaml"
-render -f gke/values-session-token.yaml >"${TMP}/token.yaml"
-if render -f gke/values-session-token.yaml --set controller.warmIdle=1 >/dev/null 2>&1; then
+render -f gke/helm/values-clone-git-repos.yaml >"${TMP}/clone.yaml"
+render -f gke/helm/values-session-token.yaml >"${TMP}/token.yaml"
+if render -f gke/helm/values-session-token.yaml --set controller.warmIdle=1 >/dev/null 2>&1; then
   echo "expected the chart to reject session tokens with warmIdle > 0" >&2
   exit 1
 fi
@@ -82,8 +82,14 @@ done
 
 if command -v mmdc >/dev/null 2>&1; then
   step "Mermaid"
-  mmdc -i docs/arch.mmd -o "${TMP}/arch.svg" >/dev/null
-  echo "docs/arch.mmd renders"
+  python3 - "${TMP}/arch.mmd" <<'PY'
+import re, sys
+blocks = re.findall(r"```mermaid\n(.*?)```", open("docs/reference.md").read(), re.S)
+open(sys.argv[1], "w").write(blocks[0])
+PY
+  read -ra mmdc_args <<<"${MMDC_ARGS:-}"
+  mmdc "${mmdc_args[@]}" -i "${TMP}/arch.mmd" -o "${TMP}/arch.svg" >/dev/null
+  echo "docs/reference.md diagram renders"
 fi
 
 printf '\nAll checks passed.\n'

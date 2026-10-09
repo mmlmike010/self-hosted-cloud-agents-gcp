@@ -6,5 +6,5 @@ worker_repository_url = "https://github.com/OWNER/REPO.git"
 worker_image_tag      = "v1"
 worker_pool_name      = "gce-lab"
 
-# Set after step 2 of gce/README.md, or leave empty to skip the first-boot clone
+# Set after step 4 of gce/terraform/README.md, or leave empty to skip the first-boot clone
 git_token_secret_id = ""

@@ -1,6 +1,6 @@
 # Values for anysphere/k8s-workers 0.2.2. Full reference:
 # https://github.com/anysphere/k8s-workers/blob/v0.2.2/chart/README.md
-# scripts/install.sh sets image.repository, image.tag, pool, and auth.existingSecret
+# gke/scripts/install.sh sets image.repository, image.tag, pool, and auth.existingSecret
 # from your environment, so the placeholders below are only defaults.
 
 # Any-repo pool: routes by name and shows under "Any repo" in cursor.com/agents

@@ -1,95 +1,69 @@
-# Path A: Compute Engine + Docker
+# Compute Engine + Docker Guide
 
-One Shielded VM in a private VPC runs the worker image under Docker. It serves one repository (`WORKER_REPOSITORY_URL`) in the Team Pool `gce-lab`. Good for a proof of concept. For concurrent sessions and many repositories, use [Path B](../gke/).
+Use this README for the architecture, operating model, validation, and troubleshooting. Use [`terraform/README.md`](terraform/README.md) for step-by-step setup commands.
 
-## What Terraform creates
+## When To Use Compute Engine
 
-| Resource | Details |
-| --- | --- |
-| VPC + subnet | `10.10.0.0/24`, Private Google Access on, no external IPs |
-| Cloud Router + Cloud NAT | One static egress IP (`nat_egress_ip` output) |
-| Firewall rule | `tcp:22` from `35.235.240.0/20` only ([IAP TCP forwarding](https://docs.cloud.google.com/iap/docs/using-tcp-forwarding)) |
-| Artifact Registry | Docker repository `cursor-workers` |
-| Secret Manager | Secret container `cursor-worker-api-key`. The key value is added with gcloud, so it never lands in Terraform state. |
-| Service account | `cursor-worker-lab-sa`: Artifact Registry Reader on the repository, Secret Accessor on the secret (and the Git token secret, if set), Logs Writer |
-| VM | `e2-standard-2`, Debian 12, Secure Boot, OS Login, [startup script](terraform/startup.sh.tpl) that reruns on every boot |
+This is the smallest footprint in the lab: one worker container on one private VM, serving one repository. It fits demos and proofs of concept.
 
-The startup script installs Docker and Git, waits up to 10 minutes each for a secret version and for the image, writes `/etc/cursor/worker.env` (mode 0600), and runs the container with `/opt/cursor/worker` mounted at `/workspace`. The container's [entrypoint](../docker/entrypoint.sh) starts `agent worker --pool gce-lab ... start`.
+Use [GKE](../gke/README.md) instead for concurrent sessions, warm workers, or many repositories.
 
-## Steps
+## What Gets Created
 
-Run everything from the repository root with `.env` filled in (see the [top-level README](../README.md#quick-start)). Each `make` target is a thin wrapper, so read the [Makefile](../Makefile) to see the exact commands.
+Terraform creates:
 
-### 1. Credentials for Terraform
+- One VPC and subnet with Private Google Access and no external IPs.
+- One Cloud Router and Cloud NAT with a static egress IP.
+- One firewall rule allowing SSH only from IAP (`35.235.240.0/20`).
+- One Artifact Registry repository for the worker image.
+- One Secret Manager secret container for the Cursor service account key.
+- One service account that can pull the image, read the secret, and write logs.
+- One Shielded VM (Debian 12, Secure Boot, OS Login).
 
-```bash
-gcloud auth application-default login
-make apis
-```
+Terraform creates only the secret container. The key value is uploaded with gcloud so it does not land in Terraform state.
 
-### 2. Optional, recommended: a read-only Git token
+## Architecture
 
-A repo-bound pool worker [uses the checkouts it already has](https://cursor.com/docs/cloud-agent/self-hosted#environments-on-self-hosted-machines) and does not clone. To give the agent real code, store a read-only token (for GitHub, a fine-grained token with **Contents: read** on the repository). On first boot the VM clones the repository with it. The token is sent as a one-off HTTP header and is not written to `.git/config`.
+The VM runs one Docker container named `cursor-worker`. It uses the shared worker image from Artifact Registry and connects outbound to Cursor over HTTPS. The container's [entrypoint](../docker/entrypoint.sh) runs `agent worker --pool gce-lab ... start`.
 
-```bash
-make gce-git-token                       # prompts for the token
-# then set GIT_TOKEN_SECRET_ID=cursor-git-read-token in .env
-```
+The workspace lives on the VM at `/opt/cursor/worker` and is mounted into the container at `/workspace`. Its `origin` is `WORKER_REPOSITORY_URL`, so Cursor routes agents for that repository to this worker.
 
-Skip this only if you will populate `/opt/cursor/worker` yourself.
+A repo-bound worker [uses the checkout it already has](https://cursor.com/docs/cloud-agent/self-hosted#environments-on-self-hosted-machines) and does not clone. To give agents real code, the startup script can clone the repository once with an optional read-only Git token. The token is passed as a one-off header and is not written to `.git/config`.
 
-### 3. Apply
+## Startup Script
 
-The Makefile passes `.env` to Terraform as `TF_VAR_*` variables. If you prefer a tfvars file, copy [`terraform/terraform.tfvars.example`](terraform/terraform.tfvars.example) to `terraform.tfvars` and run `terraform -chdir=gce/terraform apply` directly (a tfvars file takes precedence over `TF_VAR_*`).
+[`startup.sh.tpl`](terraform/startup.sh.tpl) runs on every boot and:
 
-```bash
-make gce-init
-make gce-plan
-make gce-apply
-```
+1. Installs Docker and Git.
+2. Waits up to 10 minutes for the API key in Secret Manager.
+3. On first boot, clones the repository with the Git token, or runs `git init` without one. Then sets `origin`.
+4. Writes `/etc/cursor/worker.env` (mode 0600).
+5. Waits up to 10 minutes for the worker image and pulls it.
+6. Replaces and starts the `cursor-worker` container.
 
-The VM can boot before the key and image exist. The startup script waits for both.
+## Network And Security Model
 
-### 4. Upload the service account API key
+- No external IP and no inbound rules except SSH from IAP.
+- Egress leaves through Cloud NAT on one static IP you can allowlist (`nat_egress_ip` output).
+- Artifact Registry and Secret Manager are reached over Private Google Access.
+- Admin access uses IAP TCP forwarding with OS Login.
 
-```bash
-make gce-put-key                         # prompts for the key unless CURSOR_API_KEY is exported
-```
+## Operating Model
 
-Create the key under a Cursor [service account](https://cursor.com/docs/account/enterprise/service-accounts#managing-api-keys). Pool workers reject other key types.
+One worker runs on one VM, with no autoscaling.
 
-### 5. Build and push the image
+Docker reads `--env-file` only when a container is created. After rotating the key or pushing an image with the same tag, rerun the startup script. Changing the image tag in Terraform replaces the VM.
 
-Terraform created the registry in step 3, so push after applying. Use `PLATFORM=linux/amd64` for E2 and N2 machine types, `linux/arm64` for Arm types such as T2A and C4A (and set `boot_image` to an Arm image).
+## Validation
 
-```bash
-make image
-```
+A healthy deployment has:
 
-### 6. Grant yourself SSH through IAP
+- One running `cursor-worker` container.
+- `/readyz` responding on `127.0.0.1:8080` inside the container.
+- Worker logs showing the expected pool and repo.
+- The pool selectable under your repository in [cursor.com/agents](https://cursor.com/agents).
 
-OS Login with sudo needs IAP-secured Tunnel User, Compute OS Admin Login, and Service Account User on the VM's service account ([OS Login roles](https://docs.cloud.google.com/compute/docs/oslogin/set-up-oslogin)).
-
-```bash
-make gce-access ADMIN_MEMBER=user:you@example.com
-```
-
-### 7. Verify
-
-```bash
-make gce-logs                            # startup script output from the serial console, no SSH needed
-make gce-ssh
-```
-
-On the VM:
-
-```bash
-sudo tail -n 100 /var/log/cursor-worker-bootstrap.log
-sudo docker logs -f cursor-worker
-sudo docker exec cursor-worker curl -fsS http://127.0.0.1:8080/readyz
-```
-
-A healthy repo-bound worker logs lines like the ones below (exact text varies by CLI version). Then follow [Verify an agent picks up a job](../README.md#verify-an-agent-picks-up-a-job): pick the repository that matches `WORKER_REPOSITORY_URL` and the pool `gce-lab`.
+A healthy worker log includes:
 
 ```text
 Worker is now running
@@ -98,38 +72,36 @@ Repo: <owner>/<repo>
 Pool: gce-lab
 ```
 
-### 8. If the bootstrap timed out
-
-Add the missing secret version or push the missing image, then rerun the startup script in place. No VM replacement needed.
-
-```bash
-make gce-rerun
-```
-
-## Day 2
-
-- **Rotate the key or re-push the same tag:** `make gce-put-key` or `make image`, then `make gce-rerun`. The script always replaces the container, because Docker reads `--env-file` only when a container is created. Then disable the old key version with `gcloud secrets versions disable VERSION --secret cursor-worker-api-key`.
-- **Change `TAG`:** `make gce-apply` replaces the VM, because a change to `metadata_startup_script` forces a new instance. The boot disk, including `/opt/cursor/worker`, is replaced too.
-- **Workspace state** persists across sessions and reboots on the same VM. Reset `/opt/cursor/worker` if agents should start clean.
-- **Static egress IP** for allowlists: `terraform -chdir=gce/terraform output nat_egress_ip`.
-
 ## Troubleshooting
 
-| Symptom | Fix |
-| --- | --- |
-| `Invalid API key` or HTTP 401 | Pool workers only accept a service account API key. |
-| Worker connected, no agent lands on it | Allow Self-Hosted Machines must be on. The pool name must match exactly. See [Open items](../README.md#open-items-to-confirm) on repository access. |
-| Log loops on `Waiting for Cursor API key` | Add a secret version (`make gce-put-key`). The VM service account needs Secret Accessor on the secret. |
-| Log loops on `Waiting for worker image` | Push the image with the tag in `TAG` (`make image`), then `make gce-rerun`. The VM service account needs Artifact Registry Reader. |
-| Clone fails on first boot | Check the token in `cursor-git-read-token` can read the repository. The bootstrap stops before starting the worker. Fix the token, then `make gce-rerun`. |
-| Agent runs but the repository looks empty | The workspace is `git init` plus `origin` only. Do step 2, or clone into `/opt/cursor/worker` yourself. |
-| `exec format error` | Image architecture differs from the VM. Match `PLATFORM` to the machine type. |
-| Timeouts reaching Cursor or GitHub | Check Cloud NAT: `gcloud compute routers get-status cursor-worker-lab-router --region REGION`. Behind a proxy, set `HTTPS_PROXY` for the worker. |
-| IAP SSH fails | The firewall rule must allow `35.235.240.0/20` on `tcp:22` (the module does). Redo step 6. |
+### API Key Is Invalid
 
-## Teardown
+Pool workers require a Cursor [service account](https://cursor.com/docs/account/enterprise/service-accounts) API key. Other key types are rejected.
 
-```bash
-make gce-destroy
-gcloud secrets delete cursor-git-read-token     # only if you created it in step 2
-```
+### Bootstrap Keeps Waiting
+
+The log loops on `Waiting for Cursor API key` or `Waiting for worker image`. Upload the key or push the image, then rerun the startup script.
+
+### Clone Fails On First Boot
+
+The token in `cursor-git-read-token` needs read access to the repository. The bootstrap stops before starting the worker. Fix the token and rerun the startup script.
+
+### Agent Sees An Empty Repository
+
+Without a Git token the workspace is only `git init` plus `origin`. Add the token, or clone into `/opt/cursor/worker` yourself.
+
+### Container Fails With `exec format error`
+
+The image architecture differs from the VM. Build `linux/amd64` for E2 and N2, or `linux/arm64` for T2A and C4A.
+
+### Worker Cannot Reach Cursor
+
+Check Cloud NAT with `gcloud compute routers get-status cursor-worker-lab-router --region REGION`. Behind a proxy, set `HTTPS_PROXY` for the worker.
+
+### IAP SSH Fails
+
+Grant the IAP and OS Login roles from the implementation guide.
+
+## Cleanup
+
+Destroy the resources when the demo is done. The implementation guide has the command.
