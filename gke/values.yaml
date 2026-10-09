@@ -1,0 +1,41 @@
+# Values for anysphere/k8s-workers 0.2.2. Full reference:
+# https://github.com/anysphere/k8s-workers/blob/v0.2.2/chart/README.md
+# scripts/install.sh sets image.repository, image.tag, pool, and auth.existingSecret
+# from your environment, so the placeholders below are only defaults.
+
+# Any-repo pool: routes by name and shows under "Any repo" in cursor.com/agents
+pool: gke-workers
+
+# Seconds a worker stays connected after its session ends, then the Pod exits (Succeeded)
+idleReleaseTimeout: 600
+
+# Must exist in the image and have no git remote, so workers stay any-repo
+workerDir: /workspace
+
+image:
+  repository: REGION-docker.pkg.dev/PROJECT_ID/cursor-workers/cursor-self-hosted-worker
+  tag: v1
+
+auth:
+  existingSecret: cursor-workers-api-key
+  secretKey: api-key
+  sessionToken: false
+
+controller:
+  # 1 keeps one idle worker connected and backfills after each claim.
+  # 0 claims each pending request, then spawns a Pod for it.
+  warmIdle: 1
+
+# Worker labels (passed as --label, not Kubernetes labels). repo and pool are reserved.
+labels:
+  - environment=lab
+  - cloud=gcp
+  - runtime=gke
+
+# Per worker Pod. Size like a CI runner for the repositories your agents build.
+resources:
+  requests:
+    cpu: "1"
+    memory: 2Gi
+  limits:
+    memory: 4Gi

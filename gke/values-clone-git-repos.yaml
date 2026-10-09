@@ -1,0 +1,6 @@
+# Overlay: each worker checks out the claimed agent's GitHub repositories on claim.
+# Needs a team admin to enable GitHub token minting for Team Pool workers, a named
+# pool other than "default", and HTTPS GitHub remotes.
+# https://cursor.com/docs/cloud-agent/self-hosted/pool#any-repo-pools
+extraArgs:
+  - --clone-git-repos

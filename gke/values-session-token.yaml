@@ -1,0 +1,8 @@
+# Overlay: only the controller holds the service account key. Each worker Pod gets a
+# token that serves its single claim. Claim mode only (the chart refuses warmIdle > 0),
+# and private-worker session tokens must be enabled for your team.
+# https://cursor.com/docs/cloud-agent/self-hosted/pool#session-tokens
+controller:
+  warmIdle: 0
+auth:
+  sessionToken: true
