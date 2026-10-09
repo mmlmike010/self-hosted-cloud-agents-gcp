@@ -1,0 +1,20 @@
+flowchart LR
+  subgraph GCP["Your GCP project: private subnet, no inbound rules, no external IPs"]
+    direction TB
+    W["<b>Cursor worker</b><br/>Path A: VM + Docker<br/>Path B: GKE Pods"]
+    AR["<b>Artifact Registry</b><br/>worker image"]
+    SM["<b>Secret Manager</b><br/>service account API key"]
+    NAT["<b>Cloud NAT</b><br/>static egress IP"]
+    W -. "Private Google Access" .-> AR
+    W -. "Private Google Access" .-> SM
+    W --> NAT
+  end
+  subgraph NET["Outbound HTTPS 443 only. Cursor never connects in."]
+    direction TB
+    C["<b>Cursor cloud</b><br/>agent loop, models, UI<br/>api2.cursor.sh, api.cursor.com"]
+    G["<b>Git host and<br/>package registries</b>"]
+    S["<b>Cursor-managed<br/>artifact storage</b><br/>screenshots, videos"]
+  end
+  NAT --> C
+  NAT --> G
+  NAT --> S
