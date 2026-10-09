@@ -1,0 +1,38 @@
+.env
+.env.*
+!.env.example
+
+# Terraform (.terraform.lock.hcl is committed to pin the provider build)
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*.tfvars
+*.tfvars.json
+crash.log
+crash.*.log
+override.tf
+override.tf.json
+*_override.tf
+*_override.tf.json
+
+# Kubernetes, GCP, and local secrets
+kubeconfig*
+*.kubeconfig
+application_default_credentials.json
+*-key.json
+*.pem
+*.key
+*.crt
+*.p12
+*.pfx
+*.secret
+*.secrets
+secrets/
+credentials*
+
+# Local scratch
+.DS_Store
+tmp/
+scratch/
+logs/
