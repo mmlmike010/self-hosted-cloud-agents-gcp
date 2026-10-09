@@ -1,0 +1,5 @@
+{
+  "environment": "lab",
+  "cloud": "gcp",
+  "runtime": "gce-docker"
+}
